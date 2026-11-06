@@ -1,9 +1,12 @@
-import { boolean, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const profiles = pgTable("profiles", {
   id: uuid("id").primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  /** Bumped when the password changes so older session cookies stop working. */
+  sessionVersion: integer("session_version").notNull().default(0),
   role: text("role").notNull().default("learner"),
   targetScore: integer("target_score"),
   examDate: text("exam_date"),
@@ -175,6 +178,41 @@ export const drillAnswers = pgTable("drill_answers", {
   day: text("day").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Single-use email verification and password-reset challenges. The raw token is never stored. */
+export const authChallenges = pgTable(
+  "auth_challenges",
+  {
+    id: uuid("id").primaryKey(),
+    profileId: uuid("profile_id").notNull(),
+    email: text("email").notNull(),
+    purpose: text("purpose").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("auth_challenges_token_hash").on(table.tokenHash),
+    index("auth_challenges_email_purpose").on(table.email, table.purpose, table.createdAt),
+  ],
+);
+
+/** Internal mailbox. Rows stay here even when an SMTP relay also accepts them. */
+export const authMail = pgTable(
+  "auth_mail",
+  {
+    id: uuid("id").primaryKey(),
+    toEmail: text("to_email").notNull(),
+    purpose: text("purpose").notNull(),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("auth_mail_email_purpose").on(table.toEmail, table.purpose, table.createdAt)],
+);
 
 export const events = pgTable("events", {
   id: uuid("id").primaryKey(),

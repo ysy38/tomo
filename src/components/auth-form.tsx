@@ -7,6 +7,7 @@ import { signInAction, signUpAction } from "@/server/actions";
 
 export function AuthForm({ initialMode = "login", next }: { initialMode?: "login" | "register"; next?: string }) {
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
   const [mode, setMode] = useState<"login" | "register">(initialMode);
   const login = mode === "login";
 
@@ -56,6 +57,8 @@ export function AuthForm({ initialMode = "login", next }: { initialMode?: "login
             type="email"
             required
             autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             placeholder="sen@posta.com"
             className="mt-1.5 w-full rounded-2xl border border-line bg-paper px-4 py-3 outline-none focus:border-pine"
           />
@@ -66,13 +69,37 @@ export function AuthForm({ initialMode = "login", next }: { initialMode?: "login
             name="password"
             type="password"
             required
-            minLength={6}
+            minLength={login ? 1 : 8}
             autoComplete={login ? "current-password" : "new-password"}
-            placeholder="En az 6 karakter"
+            placeholder={login ? "Şifren" : "En az 8 karakter"}
             className="mt-1.5 w-full rounded-2xl border border-line bg-paper px-4 py-3 outline-none focus:border-pine"
           />
         </label>
-        {error ? <p className="text-sm text-clay">{error}</p> : null}
+        {login ? null : (
+          <label className="block text-sm">
+            Şifre, tekrar
+            <input
+              name="confirm"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              className="mt-1.5 w-full rounded-2xl border border-line bg-paper px-4 py-3 outline-none focus:border-pine"
+            />
+          </label>
+        )}
+        {error ? (
+          <p role="alert" className="text-sm text-clay">
+            {error}
+          </p>
+        ) : null}
+        {login ? (
+          <p className="text-sm">
+            <Link href="/sifremi-unuttum" className="link-underline text-pine">
+              Şifremi unuttum
+            </Link>
+          </p>
+        ) : null}
         {process.env.NODE_ENV === "development" ? (
           <p className="text-xs text-muted">Yerel yönetici: admin@ydslab.local / lab-admin</p>
         ) : null}

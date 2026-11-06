@@ -10,7 +10,7 @@ import { hashPassword } from "@/server/password";
 import { examDraft, skillTree, stimuli, vocabDrafts, vocabLinkDrafts, type DraftItem } from "./exam-draft";
 import { packItems, packStimuli } from "./pack-draft";
 import { initSql } from "./init-sql";
-import { answers, choices, drillAnswers, events, itemSkills, itemVocabulary, items, mastery, plans, profiles, reviews, sessionItems, sessions, skills, stimuli as stimuliTable, subscriptions, vocabulary, vocabLinks } from "./schema";
+import { answers, authChallenges, authMail, choices, drillAnswers, events, itemSkills, itemVocabulary, items, mastery, plans, profiles, reviews, sessionItems, sessions, skills, stimuli as stimuliTable, subscriptions, vocabulary, vocabLinks } from "./schema";
 
 type AppDb = PgliteDatabase;
 
@@ -98,6 +98,7 @@ export async function seed(db: AppDb) {
     id: randomUUID(),
     email: "admin@ydslab.local",
     passwordHash: hashPassword("lab-admin"),
+    emailVerifiedAt: new Date(),
     role: "admin",
     onboardingCompleted: true,
     dailyMinutes: 30,
@@ -190,10 +191,28 @@ async function storedVersion(db: AppDb): Promise<string | null> {
   }
 }
 
+async function metaValue(db: AppDb, key: string): Promise<string | null> {
+  try {
+    const result = (await db.execute(sql`select value from app_meta where key = ${key}`)) as unknown;
+    const rows = Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? []);
+    return (rows[0] as { value?: string } | undefined)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** People who already had an account keep it verified. Later signups stay unverified until they confirm. */
+async function backfillVerifiedEmails(db: AppDb) {
+  if ((await metaValue(db, "auth_verified_backfill")) === "1") return;
+  await db.execute(sql`update profiles set email_verified_at = created_at where email_verified_at is null`);
+  await db.execute(sql`insert into app_meta (key, value) values ('auth_verified_backfill', '1') on conflict (key) do nothing`);
+}
+
 /** Full migrate, seed and pack sync only when the schema or content version changes. */
 async function prepare(db: AppDb) {
   if ((await storedVersion(db)) === schemaVersion) return;
   await migrate(db);
+  await backfillVerifiedEmails(db);
   await seed(db);
   await syncPack(db);
   await db.execute(
@@ -310,4 +329,4 @@ export async function publishedPool(scope: "study" | "mock" = "study"): Promise<
   return mapped;
 }
 
-export { and, asc, desc, eq, gte, inArray, lt, sql, answers, choices, drillAnswers, events, itemSkills, items, mastery, plans, profiles, reviews, sessionItems, sessions, skills, subscriptions, vocabulary, vocabLinks, stimuliTable };
+export { and, asc, desc, eq, gte, inArray, lt, sql, answers, authChallenges, authMail, choices, drillAnswers, events, itemSkills, items, mastery, plans, profiles, reviews, sessionItems, sessions, skills, subscriptions, vocabulary, vocabLinks, stimuliTable };

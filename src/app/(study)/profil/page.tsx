@@ -1,5 +1,7 @@
 import { currentProfile } from "@/server/auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { ChangePasswordForm } from "@/components/account-forms";
 import { PendingButton } from "@/components/pending-button";
 import { saveOnboardingAction, signOutAction } from "@/server/actions";
 
@@ -10,6 +12,20 @@ export default async function ProfilePage() {
     <section className="max-w-lg">
       <h1 className="text-4xl">Profil</h1>
       <p className="mt-2 text-sm text-muted">{profile.email}</p>
+      {profile.passwordHash ? (
+        <p className="mt-1 text-sm">
+          {profile.emailVerifiedAt ? (
+            "E-posta doğrulandı"
+          ) : (
+            <>
+              E-posta henüz doğrulanmadı.{" "}
+              <Link href="/dogrula" className="link-underline text-pine">
+                Bağlantı gönder
+              </Link>
+            </>
+          )}
+        </p>
+      ) : null}
       <form action={saveOnboardingAction} className="mt-6 space-y-4">
         <label className="block text-sm">
           Sınav
@@ -38,6 +54,7 @@ export default async function ProfilePage() {
           Kaydet
         </PendingButton>
       </form>
+      <ChangePasswordForm />
       <form action={signOutAction} className="mt-6">
         <PendingButton pendingLabel="Çıkış yapılıyor…" className="text-sm text-muted">
           Çıkış yap

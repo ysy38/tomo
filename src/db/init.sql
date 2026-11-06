@@ -196,3 +196,36 @@ CREATE TABLE IF NOT EXISTS drill_answers (
 CREATE UNIQUE INDEX IF NOT EXISTS drill_answers_day_question ON drill_answers (profile_id, day, question_id);
 CREATE INDEX IF NOT EXISTS drill_answers_profile_kind ON drill_answers (profile_id, kind, day);
 ALTER TABLE drill_answers ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email_verified_at timestamptz;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS session_version integer NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS auth_challenges (
+  id uuid PRIMARY KEY,
+  profile_id uuid NOT NULL,
+  email text NOT NULL,
+  purpose text NOT NULL,
+  token_hash text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS auth_challenges_token_hash ON auth_challenges (token_hash);
+CREATE INDEX IF NOT EXISTS auth_challenges_email_purpose ON auth_challenges (email, purpose, created_at);
+
+CREATE TABLE IF NOT EXISTS auth_mail (
+  id uuid PRIMARY KEY,
+  to_email text NOT NULL,
+  purpose text NOT NULL,
+  subject text NOT NULL,
+  body text NOT NULL,
+  delivered_at timestamptz,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS auth_mail_email_purpose ON auth_mail (to_email, purpose, created_at);
+
+ALTER TABLE auth_challenges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_mail ENABLE ROW LEVEL SECURITY;

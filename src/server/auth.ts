@@ -1,39 +1,42 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { createHash, randomUUID } from "node:crypto";
+import { cookies, headers } from "next/headers";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, profiles, sessions, answers } from "@/db/client";
-import { hashPassword, verifyPassword } from "./password";
-import { supabaseKey, supabaseUrl } from "./supabase";
+import {
+  changeAccountPassword,
+  confirmEmailToken,
+  latestAuthLink,
+  normalizeEmail,
+  resetPasswordWithToken,
+  sendEmailVerification,
+  sendEmailVerificationToAddress,
+  sendPasswordReset,
+  type AuthPurpose,
+} from "./account-security";
+import { passwordIssue, verifyPassword, hashPassword } from "./password";
+import { decodeSession, encodeSession } from "./session-cookie";
 
 const sessionCookie = "tomo_session";
 const guestCookie = "tomo_guest";
 const hintCookie = "tomo_in";
+const month = 60 * 60 * 24 * 30;
+
+function cookieBase(maxAge: number, httpOnly: boolean) {
+  return {
+    httpOnly,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge,
+    secure: process.env.NODE_ENV === "production",
+  };
+}
 
 function hasSupabaseSession(jar: { getAll(): { name: string }[] }) {
   return jar.getAll().some((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"));
 }
 
-function secret(): string {
-  return process.env.AUTH_SECRET || "dev-only-secret-change-me";
-}
-
-function sign(id: string): string {
-  const mac = createHmac("sha256", secret()).update(id).digest("hex");
-  return `${id}.${mac}`;
-}
-
-function readSigned(value: string | undefined): string | null {
-  if (!value) return null;
-  const [id, mac] = value.split(".");
-  if (!id || !mac) return null;
-  const expected = createHmac("sha256", secret()).update(id).digest("hex");
-  const left = Buffer.from(mac);
-  const right = Buffer.from(expected);
-  if (left.length !== right.length || !timingSafeEqual(left, right)) return null;
-  return id;
-}
-
 export async function supabaseEnabled(): Promise<boolean> {
+  const { supabaseKey, supabaseUrl } = await import("./supabase");
   return Boolean(supabaseUrl() && supabaseKey());
 }
 
@@ -63,7 +66,32 @@ async function supabaseUser(jar: { getAll(): { name: string; value: string }[] }
 export async function markSignedIn() {
   const jar = await cookies();
   if (jar.get(hintCookie)?.value === "1") return;
-  jar.set(hintCookie, "1", { httpOnly: false, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  jar.set(hintCookie, "1", cookieBase(month, false));
+}
+
+async function setSession(id: string, version: number) {
+  const jar = await cookies();
+  jar.set(sessionCookie, encodeSession(id, version), cookieBase(month, true));
+  await markSignedIn();
+}
+
+export function safeNextPath(value: string | undefined | null, fallback = "/bugun") {
+  return value && /^\/(?![/\\])/.test(value) ? value : fallback;
+}
+
+/** Origin of the request the learner is actually using, so mail links stay on this host. */
+export async function requestOrigin() {
+  const h = await headers();
+  const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0]?.trim() ?? "";
+  if (!/^[a-z0-9.-]+(?::\d+)?$/i.test(host)) return "http://localhost:3000";
+  const forwarded = h.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const proto = forwarded === "http" || forwarded === "https" ? forwarded : host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
+  return `${proto}://${host}`;
+}
+
+function devAuthLink(url?: string) {
+  if (process.env.NODE_ENV === "production") return undefined;
+  return url;
 }
 
 export async function readGuestId(): Promise<string | null> {
@@ -76,7 +104,7 @@ export async function getGuestId(): Promise<string> {
   if (existing) return existing;
   const id = randomUUID();
   const jar = await cookies();
-  jar.set(guestCookie, id, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+  jar.set(guestCookie, id, cookieBase(month, true));
   return id;
 }
 
@@ -84,11 +112,13 @@ export async function currentProfile() {
   const jar = await cookies();
   const remote = await supabaseUser(jar);
   if (!remote) {
-    const id = readSigned(jar.get(sessionCookie)?.value);
-    if (!id) return null;
+    const parsed = decodeSession(jar.get(sessionCookie)?.value);
+    if (!parsed) return null;
     const db = await getDb();
-    const rows = await db.select().from(profiles).where(eq(profiles.id, id)).limit(1);
-    return rows[0] ?? null;
+    const rows = await db.select().from(profiles).where(eq(profiles.id, parsed.id)).limit(1);
+    const profile = rows[0];
+    if (!profile || Number(profile.sessionVersion) !== parsed.version) return null;
+    return profile;
   }
   const db = await getDb();
   const found = await db.select().from(profiles).where(eq(profiles.id, remote.id)).limit(1);
@@ -111,16 +141,23 @@ function adminEmails(): string[] {
     .filter(Boolean);
 }
 
-export async function registerAccount(email: string, password: string): Promise<{ error?: string }> {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized.includes("@") || password.length < 6) return { error: "Geçerli bir e-posta ve en az 6 karakterlik bir şifre gir." };
+export async function registerAccount(email: string, password: string, confirm: string): Promise<{ error?: string; channel?: "internal" | "supabase" }> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return { error: "Geçerli bir e-posta gir." };
+  if (password !== confirm) return { error: "Şifreler aynı değil." };
+  const issue = passwordIssue(password, normalized);
+  if (issue) return { error: issue };
   if (await supabaseEnabled()) {
     const { createSupabaseServer } = await import("./supabase");
     const supabase = await createSupabaseServer();
-    const { error } = await supabase.auth.signUp({ email: normalized, password });
+    const { error } = await supabase.auth.signUp({
+      email: normalized,
+      password,
+      options: { emailRedirectTo: `${await requestOrigin()}/giris` },
+    });
     if (error) return { error: error.message };
     await markSignedIn();
-    return {};
+    return { channel: "supabase" };
   }
   const db = await getDb();
   const existing = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, normalized)).limit(1);
@@ -132,14 +169,13 @@ export async function registerAccount(email: string, password: string): Promise<
     passwordHash: hashPassword(password),
     role: adminEmails().includes(normalized) ? "admin" : "learner",
   });
-  const jar = await cookies();
-  jar.set(sessionCookie, sign(id), { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
-  await markSignedIn();
-  return {};
+  await setSession(id, 0);
+  return { channel: "internal" };
 }
 
 export async function loginAccount(email: string, password: string): Promise<{ error?: string }> {
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeEmail(email);
+  if (!normalized) return { error: "Geçerli bir e-posta gir." };
   if (await supabaseEnabled()) {
     const { createSupabaseServer } = await import("./supabase");
     const supabase = await createSupabaseServer();
@@ -152,9 +188,7 @@ export async function loginAccount(email: string, password: string): Promise<{ e
   const rows = await db.select().from(profiles).where(eq(profiles.email, normalized)).limit(1);
   const profile = rows[0];
   if (!profile || !verifyPassword(password, profile.passwordHash)) return { error: "E-posta ya da şifre yanlış. Tekrar dener misin?" };
-  const jar = await cookies();
-  jar.set(sessionCookie, sign(profile.id), { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
-  await markSignedIn();
+  await setSession(profile.id, profile.sessionVersion);
   return {};
 }
 
@@ -167,6 +201,104 @@ export async function logoutAccount() {
   }
   jar.delete(sessionCookie);
   jar.delete(hintCookie);
+}
+
+export async function requestPasswordReset(email: string) {
+  const origin = await requestOrigin();
+  if (await supabaseEnabled()) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return { error: "Geçerli bir e-posta gir." };
+    try {
+      const { createSupabaseServer } = await import("./supabase");
+      const supabase = await createSupabaseServer();
+      await supabase.auth.resetPasswordForEmail(normalized, { redirectTo: `${origin}/giris` });
+    } catch {
+      // The response stays the same when the address is unknown.
+    }
+    return { ok: true as const };
+  }
+  const result = await sendPasswordReset(await getDb(), email, origin);
+  if ("error" in result && result.error) return { error: result.error };
+  return { ok: true as const, devLink: devAuthLink("devLink" in result ? result.devLink : undefined) };
+}
+
+export async function requestEmailVerification(email?: string) {
+  const origin = await requestOrigin();
+  const profile = await currentProfile();
+  if (profile && !email) {
+    if (!profile.passwordHash && (await supabaseEnabled())) {
+      try {
+        const { createSupabaseServer } = await import("./supabase");
+        const supabase = await createSupabaseServer();
+        const { error } = await supabase.auth.resend({ type: "signup", email: profile.email });
+        if (error) return { error: "Doğrulama postası şu an gönderilemedi. Biraz sonra tekrar dene." };
+      } catch {
+        return { error: "Doğrulama postası şu an gönderilemedi. Biraz sonra tekrar dene." };
+      }
+      return { ok: true as const };
+    }
+    const result = await sendEmailVerification(await getDb(), profile.id, origin);
+    if ("error" in result && result.error) return { error: result.error };
+    return { ok: true as const, already: "already" in result ? result.already : undefined, devLink: devAuthLink("devLink" in result ? result.devLink : undefined) };
+  }
+  if (await supabaseEnabled()) {
+    const normalized = normalizeEmail(email ?? "");
+    if (!normalized) return { error: "Geçerli bir e-posta gir." };
+    try {
+      const { createSupabaseServer } = await import("./supabase");
+      const supabase = await createSupabaseServer();
+      await supabase.auth.resend({ type: "signup", email: normalized });
+    } catch {
+      // Same response whether or not the address can receive mail.
+    }
+    return { ok: true as const };
+  }
+  const result = await sendEmailVerificationToAddress(await getDb(), email ?? "", origin);
+  if ("error" in result && result.error) return { error: result.error };
+  return { ok: true as const, devLink: devAuthLink("devLink" in result ? result.devLink : undefined) };
+}
+
+export async function confirmEmail(token: string): Promise<{ error: string } | { ok: true }> {
+  const result = await confirmEmailToken(await getDb(), token);
+  if ("error" in result) return { error: result.error };
+  await setSession(result.profileId, Number(result.sessionVersion));
+  return { ok: true };
+}
+
+export async function resetPassword(token: string, password: string, confirm: string): Promise<{ error: string } | { ok: true }> {
+  const result = await resetPasswordWithToken(await getDb(), token, password, confirm);
+  if ("error" in result) return { error: result.error };
+  await setSession(result.profileId, Number(result.sessionVersion));
+  return { ok: true };
+}
+
+export async function updatePassword(current: string, next: string, confirm: string) {
+  const profile = await currentProfile();
+  if (!profile) return { error: "Devam etmek için giriş yap." };
+  if (!profile.passwordHash && (await supabaseEnabled())) {
+    if (next !== confirm) return { error: "Şifreler aynı değil." };
+    const issue = passwordIssue(next, profile.email);
+    if (issue) return { error: issue };
+    const { createSupabaseServer } = await import("./supabase");
+    const supabase = await createSupabaseServer();
+    const signed = await supabase.auth.signInWithPassword({ email: profile.email, password: current });
+    if (signed.error) return { error: "Mevcut şifre yanlış." };
+    const updated = await supabase.auth.updateUser({ password: next });
+    if (updated.error) return { error: "Şifre güncellenemedi. Biraz sonra tekrar dene." };
+    return { ok: true as const };
+  }
+  const result = await changeAccountPassword(await getDb(), profile.id, current, next, confirm);
+  if ("error" in result) return result;
+  await setSession(profile.id, Number(result.sessionVersion));
+  return { ok: true as const };
+}
+
+/** Development only. Production never reads the mail queue back into a page. */
+export async function previewAuthLink(purpose: AuthPurpose) {
+  if (process.env.NODE_ENV === "production") return null;
+  const profile = await currentProfile();
+  if (!profile) return null;
+  return latestAuthLink(await getDb(), profile.email, purpose);
 }
 
 export async function claimGuest(profileId: string) {

@@ -6,14 +6,13 @@ import { clearPoolCache, getDb, profiles } from "@/db/client";
 import { publishBlockers } from "@/modules/content/publish";
 import { devCheckoutAllowed } from "@/modules/billing/iyzico";
 import type { CheckoutPlan } from "@/modules/billing/entitlement";
-import { currentProfile, loginAccount, logoutAccount, markSignedIn, registerAccount } from "./auth";
+import { confirmEmail, currentProfile, loginAccount, logoutAccount, markSignedIn, registerAccount, requestEmailVerification, requestPasswordReset, resetPassword, safeNextPath, updatePassword } from "./auth";
 import { claimGuestSessions, createSession, devActivate, ensureDailyPlan, entitlementFor, recordEvent, saveAnswer, setFlag, submitSession } from "./sessions";
 import { answerDrill } from "./drills";
 
 /** Only same-site paths, so the form cannot be used to bounce people to another domain. */
 function nextPath(formData: FormData) {
-  const value = String(formData.get("next") ?? "");
-  return /^\/(?![/\\])/.test(value) ? value : "/bugun";
+  return safeNextPath(String(formData.get("next") ?? ""));
 }
 
 export async function signInAction(formData: FormData) {
@@ -25,14 +24,51 @@ export async function signInAction(formData: FormData) {
 }
 
 export async function signUpAction(formData: FormData) {
-  const result = await registerAccount(String(formData.get("email") ?? ""), String(formData.get("password") ?? ""));
+  const result = await registerAccount(String(formData.get("email") ?? ""), String(formData.get("password") ?? ""), String(formData.get("confirm") ?? ""));
   if (result.error) return result;
   const profile = await currentProfile();
   if (profile) {
     await claimGuestSessions(profile.id);
     await recordEvent("user_registered", profile.id);
+    if (result.channel === "internal") await requestEmailVerification();
   }
+  if (result.channel === "internal") redirect(`/dogrula?durum=gonderildi&sonra=${encodeURIComponent(nextPath(formData))}`);
   redirect(nextPath(formData));
+}
+
+export async function forgotPasswordAction(formData: FormData) {
+  const result = await requestPasswordReset(String(formData.get("email") ?? ""));
+  if ("error" in result) return result;
+  return { ok: true as const, devLink: result.devLink };
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  const result = await resetPassword(String(formData.get("token") ?? ""), String(formData.get("password") ?? ""), String(formData.get("confirm") ?? ""));
+  if ("error" in result) return result;
+  const profile = await currentProfile();
+  if (profile) await claimGuestSessions(profile.id);
+  redirect(nextPath(formData));
+}
+
+export async function confirmEmailAction(formData: FormData) {
+  const result = await confirmEmail(String(formData.get("token") ?? ""));
+  if ("error" in result) return result;
+  const profile = await currentProfile();
+  if (profile) await claimGuestSessions(profile.id);
+  redirect(nextPath(formData));
+}
+
+export async function resendVerificationAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "");
+  const result = await requestEmailVerification(email || undefined);
+  if ("error" in result) return result;
+  return { ok: true as const, already: "already" in result ? result.already : undefined, devLink: "devLink" in result ? result.devLink : undefined };
+}
+
+export async function changePasswordAction(formData: FormData) {
+  const result = await updatePassword(String(formData.get("current") ?? ""), String(formData.get("password") ?? ""), String(formData.get("confirm") ?? ""));
+  if ("error" in result && result.error) return result;
+  return { ok: true as const };
 }
 
 export async function signOutAction() {

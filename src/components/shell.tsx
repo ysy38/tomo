@@ -41,6 +41,7 @@ const footerColumns: { title: string; links: [string, string][]; columns?: numbe
     links: [
       ["Fiyat", "/fiyat"],
       ["Giriş yap", "/giris"],
+      ["Şifremi unuttum", "/sifremi-unuttum"],
     ],
   },
   {

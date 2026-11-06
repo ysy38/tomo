@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/brand";
 
-const privatePaths = ["/bugun", "/admin", "/oturum", "/profil", "/odeme"];
+const privatePaths = ["/bugun", "/admin", "/oturum", "/profil", "/odeme", "/sifremi-unuttum", "/sifre-sifirla", "/dogrula"];
 
 /** Allow general crawlers + major AI/GEO bots; keep study/account routes private. */
 export default function robots(): MetadataRoute.Robots {
