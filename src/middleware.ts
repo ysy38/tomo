@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { refreshSupabaseSession } from "@/server/supabase-session";
 
 /**
  * Legacy junk from a previous site on this domain (promo sitemaps, coupon
@@ -15,8 +16,8 @@ function isLegacyJunk(pathname: string): boolean {
   return false;
 }
 
-export function middleware(request: NextRequest) {
-  if (!isLegacyJunk(request.nextUrl.pathname)) return NextResponse.next();
+export async function middleware(request: NextRequest) {
+  if (!isLegacyJunk(request.nextUrl.pathname)) return refreshSupabaseSession(request);
 
   return new NextResponse("Gone", {
     status: 410,

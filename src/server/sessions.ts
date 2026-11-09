@@ -28,6 +28,7 @@ import {
   subscriptions,
 } from "@/db/client";
 import { getGuestId, claimGuest } from "./auth";
+import { allowUse } from "./rate-limit";
 
 export type Mode = "diagnostic" | "practice" | "simulator";
 
@@ -96,6 +97,7 @@ export async function createSession(input: {
   profileId: string | null;
   itemIds?: string[];
 }): Promise<{ id?: string; error?: string; paywall?: boolean }> {
+  if (!(await allowUse("session"))) return { error: "Çok sık yeni çalışma açtın. Biraz sonra devam edebilirsin." };
   const [guestId, access, exam, pool] = await Promise.all([
     getGuestId(),
     entitlementFor(input.profileId),
@@ -243,6 +245,7 @@ export async function saveAnswer(input: {
   profileId: string | null;
   guestId: string;
 }) {
+  if (!(await allowUse("answer"))) return { error: "Çok hızlı gidiyorsun. Bir dakika sonra devam et." };
   const session = await ownedSession(input.sessionId, input.profileId, input.guestId);
   if (!session || session.status !== "active") return { error: "Bu test bitti; artık cevap değiştiremezsin." };
   if (session.mode === "simulator" && session.endsAt && session.endsAt.getTime() < Date.now()) {

@@ -198,6 +198,18 @@ export const authChallenges = pgTable(
   ],
 );
 
+/** Hashed counters for sign-in, mail, and study requests. Raw IP addresses are not stored. */
+export const authLimits = pgTable(
+  "auth_limits",
+  {
+    id: uuid("id").primaryKey(),
+    keyHash: text("key_hash").notNull(),
+    purpose: text("purpose").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("auth_limits_lookup").on(table.purpose, table.keyHash, table.createdAt)],
+);
+
 /** Internal mailbox. Rows stay here even when an SMTP relay also accepts them. */
 export const authMail = pgTable(
   "auth_mail",

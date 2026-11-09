@@ -1,22 +1,23 @@
 import { databaseInfo, getDb, sql } from "@/db/client";
+import { allowUse } from "@/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 function describe(error: unknown) {
-  const raw = error instanceof Error ? error.message : String(error);
-  const code = (error as { code?: string } | null)?.code ?? null;
-  return { code, message: raw.replace(/\b[a-z]+:\/\/\S+/gi, "[url]").slice(0, 300) };
+  const code = (error as { code?: string } | null)?.code;
+  return code && /^[A-Z0-9]{5}$/.test(code) ? code : "unavailable";
 }
 
 export async function GET() {
   const started = Date.now();
-  const info = databaseInfo();
+  const driver = databaseInfo().driver;
   const region = process.env.VERCEL_REGION ?? null;
+  if (!(await allowUse("health"))) return Response.json({ ok: false, driver, region }, { status: 429 });
   try {
     const db = await getDb();
     await db.execute(sql`select 1`);
-    return Response.json({ ok: true, ...info, region, ms: Date.now() - started });
+    return Response.json({ ok: true, driver, region, ms: Date.now() - started });
   } catch (error) {
-    return Response.json({ ok: false, ...info, region, ms: Date.now() - started, error: describe(error) }, { status: 503 });
+    return Response.json({ ok: false, driver, region, ms: Date.now() - started, error: describe(error) }, { status: 503 });
   }
 }

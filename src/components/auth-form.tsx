@@ -90,13 +90,21 @@ export function AuthForm({ initialMode = "login", next }: { initialMode?: "login
         )}
         {error ? (
           <p role="alert" className="text-sm text-clay">
-            {error}
+            {error}{" "}
+            {error.includes("doğrula") ? (
+              <Link href={email ? `/dogrula?durum=gonderildi&posta=${encodeURIComponent(email)}` : "/dogrula"} className="link-underline">
+                Postayı yeniden gönder
+              </Link>
+            ) : null}
           </p>
         ) : null}
         {login ? (
-          <p className="text-sm">
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <Link href="/sifremi-unuttum" className="link-underline text-pine">
               Şifremi unuttum
+            </Link>
+            <Link href={email ? `/dogrula?durum=gonderildi&posta=${encodeURIComponent(email)}` : "/dogrula"} className="link-underline text-pine">
+              Doğrulama postası gelmedi mi?
             </Link>
           </p>
         ) : null}

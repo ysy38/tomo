@@ -6,7 +6,7 @@ import { clearPoolCache, getDb, profiles } from "@/db/client";
 import { publishBlockers } from "@/modules/content/publish";
 import { devCheckoutAllowed } from "@/modules/billing/iyzico";
 import type { CheckoutPlan } from "@/modules/billing/entitlement";
-import { confirmEmail, currentProfile, loginAccount, logoutAccount, markSignedIn, registerAccount, requestEmailVerification, requestPasswordReset, resetPassword, safeNextPath, updatePassword } from "./auth";
+import { completeRecovery, confirmEmail, currentProfile, loginAccount, logoutAccount, markSignedIn, registerAccount, requestEmailVerification, requestPasswordReset, resetPassword, safeNextPath, updatePassword } from "./auth";
 import { claimGuestSessions, createSession, devActivate, ensureDailyPlan, entitlementFor, recordEvent, saveAnswer, setFlag, submitSession } from "./sessions";
 import { answerDrill } from "./drills";
 
@@ -24,7 +24,9 @@ export async function signInAction(formData: FormData) {
 }
 
 export async function signUpAction(formData: FormData) {
-  const result = await registerAccount(String(formData.get("email") ?? ""), String(formData.get("password") ?? ""), String(formData.get("confirm") ?? ""));
+  const next = nextPath(formData);
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const result = await registerAccount(email, String(formData.get("password") ?? ""), String(formData.get("confirm") ?? ""), next);
   if (result.error) return result;
   const profile = await currentProfile();
   if (profile) {
@@ -32,8 +34,10 @@ export async function signUpAction(formData: FormData) {
     await recordEvent("user_registered", profile.id);
     if (result.channel === "internal") await requestEmailVerification();
   }
-  if (result.channel === "internal") redirect(`/dogrula?durum=gonderildi&sonra=${encodeURIComponent(nextPath(formData))}`);
-  redirect(nextPath(formData));
+  if (result.channel === "internal" || result.pending) {
+    redirect(`/dogrula?durum=gonderildi&posta=${encodeURIComponent(email)}&sonra=${encodeURIComponent(next)}`);
+  }
+  redirect(next);
 }
 
 export async function forgotPasswordAction(formData: FormData) {
@@ -63,6 +67,14 @@ export async function resendVerificationAction(formData: FormData) {
   const result = await requestEmailVerification(email || undefined);
   if ("error" in result) return result;
   return { ok: true as const, already: "already" in result ? result.already : undefined, devLink: "devLink" in result ? result.devLink : undefined };
+}
+
+export async function completeRecoveryAction(formData: FormData) {
+  const result = await completeRecovery(String(formData.get("password") ?? ""), String(formData.get("confirm") ?? ""));
+  if ("error" in result && result.error) return result;
+  const profile = await currentProfile();
+  if (profile) await claimGuestSessions(profile.id);
+  redirect(`/sifre-sifirla?durum=guncellendi&sonra=${encodeURIComponent(nextPath(formData))}`);
 }
 
 export async function changePasswordAction(formData: FormData) {

@@ -13,8 +13,12 @@ import {
   sendPasswordReset,
   type AuthPurpose,
 } from "./account-security";
+import { publicAuthError } from "./auth-errors";
 import { passwordIssue, verifyPassword, hashPassword } from "./password";
+import { allowAuth, limitedMessage } from "./rate-limit";
 import { decodeSession, encodeSession } from "./session-cookie";
+
+export { normalizeEmail };
 
 const sessionCookie = "tomo_session";
 const guestCookie = "tomo_guest";
@@ -141,23 +145,29 @@ function adminEmails(): string[] {
     .filter(Boolean);
 }
 
-export async function registerAccount(email: string, password: string, confirm: string): Promise<{ error?: string; channel?: "internal" | "supabase" }> {
+export async function registerAccount(
+  email: string,
+  password: string,
+  confirm: string,
+  next = "/bugun",
+): Promise<{ error?: string; channel?: "internal" | "supabase"; pending?: boolean }> {
   const normalized = normalizeEmail(email);
   if (!normalized) return { error: "Geçerli bir e-posta gir." };
   if (password !== confirm) return { error: "Şifreler aynı değil." };
   const issue = passwordIssue(password, normalized);
   if (issue) return { error: issue };
+  if (!(await allowAuth("signup", normalized))) return { error: limitedMessage };
   if (await supabaseEnabled()) {
     const { createSupabaseServer } = await import("./supabase");
     const supabase = await createSupabaseServer();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: normalized,
       password,
-      options: { emailRedirectTo: `${await requestOrigin()}/giris` },
+      options: { emailRedirectTo: `${await requestOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath(next))}` },
     });
-    if (error) return { error: error.message };
-    await markSignedIn();
-    return { channel: "supabase" };
+    if (error) return { error: publicAuthError(error.message) };
+    if (data.session) await markSignedIn();
+    return { channel: "supabase", pending: !data.session };
   }
   const db = await getDb();
   const existing = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.email, normalized)).limit(1);
@@ -176,11 +186,12 @@ export async function registerAccount(email: string, password: string, confirm: 
 export async function loginAccount(email: string, password: string): Promise<{ error?: string }> {
   const normalized = normalizeEmail(email);
   if (!normalized) return { error: "Geçerli bir e-posta gir." };
+  if (!(await allowAuth("login", normalized))) return { error: limitedMessage };
   if (await supabaseEnabled()) {
     const { createSupabaseServer } = await import("./supabase");
     const supabase = await createSupabaseServer();
     const { error } = await supabase.auth.signInWithPassword({ email: normalized, password });
-    if (error) return { error: error.message };
+    if (error) return { error: publicAuthError(error.message) };
     await markSignedIn();
     return {};
   }
@@ -205,13 +216,14 @@ export async function logoutAccount() {
 
 export async function requestPasswordReset(email: string) {
   const origin = await requestOrigin();
+  const normalized = normalizeEmail(email);
+  if (!normalized) return { error: "Geçerli bir e-posta gir." };
+  if (!(await allowAuth("reset", normalized))) return { error: limitedMessage };
   if (await supabaseEnabled()) {
-    const normalized = normalizeEmail(email);
-    if (!normalized) return { error: "Geçerli bir e-posta gir." };
     try {
       const { createSupabaseServer } = await import("./supabase");
       const supabase = await createSupabaseServer();
-      await supabase.auth.resetPasswordForEmail(normalized, { redirectTo: `${origin}/giris` });
+      await supabase.auth.resetPasswordForEmail(normalized, { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/sifre-sifirla")}` });
     } catch {
       // The response stays the same when the address is unknown.
     }
@@ -226,11 +238,16 @@ export async function requestEmailVerification(email?: string) {
   const origin = await requestOrigin();
   const profile = await currentProfile();
   if (profile && !email) {
+    if (!(await allowAuth("resend", profile.email))) return { error: limitedMessage };
     if (!profile.passwordHash && (await supabaseEnabled())) {
       try {
         const { createSupabaseServer } = await import("./supabase");
         const supabase = await createSupabaseServer();
-        const { error } = await supabase.auth.resend({ type: "signup", email: profile.email });
+        const { error } = await supabase.auth.resend({
+          type: "signup",
+          email: profile.email,
+          options: { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/bugun")}` },
+        });
         if (error) return { error: "Doğrulama postası şu an gönderilemedi. Biraz sonra tekrar dene." };
       } catch {
         return { error: "Doğrulama postası şu an gönderilemedi. Biraz sonra tekrar dene." };
@@ -244,16 +261,24 @@ export async function requestEmailVerification(email?: string) {
   if (await supabaseEnabled()) {
     const normalized = normalizeEmail(email ?? "");
     if (!normalized) return { error: "Geçerli bir e-posta gir." };
+    if (!(await allowAuth("resend", normalized))) return { error: limitedMessage };
     try {
       const { createSupabaseServer } = await import("./supabase");
       const supabase = await createSupabaseServer();
-      await supabase.auth.resend({ type: "signup", email: normalized });
+      await supabase.auth.resend({
+        type: "signup",
+        email: normalized,
+        options: { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/bugun")}` },
+      });
     } catch {
       // Same response whether or not the address can receive mail.
     }
     return { ok: true as const };
   }
-  const result = await sendEmailVerificationToAddress(await getDb(), email ?? "", origin);
+  const normalized = normalizeEmail(email ?? "");
+  if (!normalized) return { error: "Geçerli bir e-posta gir." };
+  if (!(await allowAuth("resend", normalized))) return { error: limitedMessage };
+  const result = await sendEmailVerificationToAddress(await getDb(), normalized, origin);
   if ("error" in result && result.error) return { error: result.error };
   return { ok: true as const, devLink: devAuthLink("devLink" in result ? result.devLink : undefined) };
 }
@@ -279,17 +304,37 @@ export async function updatePassword(current: string, next: string, confirm: str
     if (next !== confirm) return { error: "Şifreler aynı değil." };
     const issue = passwordIssue(next, profile.email);
     if (issue) return { error: issue };
+    if (!(await allowAuth("password", profile.email))) return { error: limitedMessage };
     const { createSupabaseServer } = await import("./supabase");
     const supabase = await createSupabaseServer();
     const signed = await supabase.auth.signInWithPassword({ email: profile.email, password: current });
     if (signed.error) return { error: "Mevcut şifre yanlış." };
     const updated = await supabase.auth.updateUser({ password: next });
-    if (updated.error) return { error: "Şifre güncellenemedi. Biraz sonra tekrar dene." };
+    if (updated.error) return { error: publicAuthError(updated.error.message) };
     return { ok: true as const };
   }
   const result = await changeAccountPassword(await getDb(), profile.id, current, next, confirm);
   if ("error" in result) return result;
   await setSession(profile.id, Number(result.sessionVersion));
+  return { ok: true as const };
+}
+
+/** Sets a new password from the Supabase recovery session opened by the email link. */
+export async function completeRecovery(password: string, confirm: string) {
+  if (password !== confirm) return { error: "Şifreler aynı değil." };
+  const issue = passwordIssue(password);
+  if (issue) return { error: issue };
+  if (!(await supabaseEnabled())) return { error: "Bu sayfa e-postadaki bağlantıyla açılır." };
+  if (!(await allowAuth("password"))) return { error: limitedMessage };
+  const { createSupabaseServer } = await import("./supabase");
+  const supabase = await createSupabaseServer();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user?.email) return { error: "Bu sayfa e-postadaki bağlantıyla açılır. Bağlantının süresi dolmuş olabilir." };
+  const emailIssue = passwordIssue(password, data.user.email);
+  if (emailIssue) return { error: emailIssue };
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: publicAuthError(error.message) };
+  await markSignedIn();
   return { ok: true as const };
 }
 

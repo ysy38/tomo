@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PendingButton } from "@/components/pending-button";
-import { changePasswordAction, confirmEmailAction, forgotPasswordAction, resendVerificationAction, resetPasswordAction } from "@/server/actions";
+import { changePasswordAction, completeRecoveryAction, confirmEmailAction, forgotPasswordAction, resendVerificationAction, resetPasswordAction } from "@/server/actions";
 
 const field = "mt-1.5 w-full rounded-2xl border border-line bg-paper px-4 py-3 outline-none focus:border-pine";
 
@@ -27,7 +27,7 @@ export function ForgotPasswordForm() {
       setError(result.error);
       return;
     }
-    setDone("Bu adres için bir hesap varsa, şifre yenileme bağlantısını gönderdik. Birkaç dakika içinde gelmezse istenmeyen kutusuna da bak.");
+    setDone("Bu adres için bir hesap varsa, şifre yenileme bağlantısını gönderdik. Postadaki bağlantı yeni şifreni yazacağın sayfayı açar. Kaydedince çalışmana dönersin.");
     setDevLink(result && "devLink" in result ? result.devLink ?? null : null);
   }
 
@@ -87,6 +87,35 @@ export function ResetPasswordForm({ token, next }: { token: string; next: string
   );
 }
 
+export function RecoveryPasswordForm({ next }: { next: string }) {
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(formData: FormData) {
+    setError(null);
+    const result = await completeRecoveryAction(formData);
+    if (result && "error" in result && result.error) setError(result.error);
+  }
+
+  return (
+    <form action={submit} className="space-y-4">
+      <input type="hidden" name="next" value={next} />
+      <p className="text-sm leading-6 text-muted">E-postadaki bağlantı bu cihazdaki oturumu açtı. Yeni şifreni kaydet; çalışman hesabında durur.</p>
+      <label className="block text-sm">
+        Yeni şifre
+        <input name="password" type="password" required minLength={8} autoComplete="new-password" placeholder="En az 8 karakter" className={field} />
+      </label>
+      <label className="block text-sm">
+        Yeni şifre, tekrar
+        <input name="confirm" type="password" required minLength={8} autoComplete="new-password" className={field} />
+      </label>
+      <Notice error={error} message={null} />
+      <PendingButton pendingLabel="Kaydediliyor…" className="w-full rounded-full bg-pine px-4 py-3 text-cream">
+        Şifreyi kaydet
+      </PendingButton>
+    </form>
+  );
+}
+
 export function ConfirmEmailForm({ token, next }: { token: string; next: string }) {
   const [error, setError] = useState<string | null>(null);
 
@@ -121,14 +150,18 @@ export function ResendVerificationForm({
   sent,
   next,
   preview,
+  continueHref,
+  continueLabel = "Çalışmaya devam et",
 }: {
   email?: string;
   sent?: boolean;
   next: string;
   preview?: string | null;
+  continueHref?: string;
+  continueLabel?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(sent ? "Doğrulama bağlantısını e-postana gönderdik. Çalışmaya şimdi de devam edebilirsin." : null);
+  const [message, setMessage] = useState<string | null>(sent ? "Doğrulama bağlantısını e-postana gönderdik. Gelen kutundaki bağlantıya tıkla." : null);
   const [devLink, setDevLink] = useState<string | null>(preview ?? null);
   const [address, setAddress] = useState("");
 
@@ -151,7 +184,7 @@ export function ResendVerificationForm({
     <form action={submit} className="space-y-4">
       {email ? (
         <>
-          <input type="hidden" name="email" value="" />
+          <input type="hidden" name="email" value={email} />
           <p className="text-sm leading-6 text-muted">
             Bağlantı <span className="text-ink">{email}</span> adresine gider.
           </p>
@@ -174,8 +207,8 @@ export function ResendVerificationForm({
         {sent || message ? "Bağlantıyı yeniden gönder" : "Doğrulama bağlantısı gönder"}
       </PendingButton>
       <p className="text-sm text-muted">
-        <Link href={next} className="link-underline text-pine">
-          Çalışmaya devam et
+        <Link href={continueHref ?? next} className="link-underline text-pine">
+          {continueLabel}
         </Link>
       </p>
     </form>

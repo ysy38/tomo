@@ -135,7 +135,7 @@ describe("account security", () => {
     const migrated = new PGlite();
     await migratePglite(migrated);
     const grants = await migrated.query<{ grantee: string }>(
-      "select grantee from information_schema.role_table_grants where table_schema = 'public' and table_name in ('auth_challenges', 'auth_mail') and grantee in ('anon', 'authenticated', 'PUBLIC')",
+      "select grantee from information_schema.role_table_grants where table_schema = 'public' and table_name in ('auth_challenges', 'auth_mail', 'auth_limits', 'items', 'choices', 'profiles', 'sessions', 'answers') and grantee in ('anon', 'authenticated', 'PUBLIC')",
     );
     expect(grants.rows).toEqual([]);
     await migrated.close();

@@ -23,6 +23,45 @@ async function migrate(db: AppDb) {
   }
 }
 
+const lockedTables = [
+  "profiles",
+  "sessions",
+  "session_items",
+  "answers",
+  "mastery",
+  "reviews",
+  "plans",
+  "subscriptions",
+  "events",
+  "drill_answers",
+  "items",
+  "choices",
+  "stimuli",
+  "skills",
+  "vocabulary",
+  "vocab_links",
+  "item_skills",
+  "item_vocabulary",
+  "app_meta",
+  "auth_challenges",
+  "auth_mail",
+  "auth_limits",
+]
+  .map((name) => `public.${name}`)
+  .join(", ");
+
+/** The browser key cannot read the bank or learner rows. The server connects as the table owner, so this does not affect the app. */
+async function lockPublicApi(db: AppDb) {
+  try {
+    const result = (await db.execute(sql`select 1 as ok from pg_roles where rolname = 'anon'`)) as unknown;
+    const rows = Array.isArray(result) ? result : ((result as { rows?: unknown[] }).rows ?? []);
+    if (rows.length === 0) return;
+    await db.execute(sql.raw(`REVOKE ALL ON TABLE ${lockedTables} FROM PUBLIC, anon, authenticated`));
+  } catch {
+    // A local database without the Data API roles keeps working.
+  }
+}
+
 function assertDraft(draft: DraftItem) {
   const blockers = publishBlockers({
     stem: draft.stem,
@@ -210,7 +249,10 @@ async function backfillVerifiedEmails(db: AppDb) {
 
 /** Full migrate, seed and pack sync only when the schema or content version changes. */
 async function prepare(db: AppDb) {
-  if ((await storedVersion(db)) === schemaVersion) return;
+  if ((await storedVersion(db)) === schemaVersion) {
+    await lockPublicApi(db);
+    return;
+  }
   await migrate(db);
   await backfillVerifiedEmails(db);
   await seed(db);
@@ -218,6 +260,7 @@ async function prepare(db: AppDb) {
   await db.execute(
     sql`insert into app_meta (key, value) values ('schema', ${schemaVersion}) on conflict (key) do update set value = excluded.value`,
   );
+  await lockPublicApi(db);
 }
 
 const urlSources = ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL_NON_POOLING"] as const;

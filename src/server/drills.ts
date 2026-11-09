@@ -15,6 +15,7 @@ import {
   type DrillFeedback,
   type DrillKind,
 } from "@/modules/drill/drill";
+import { allowUse } from "./rate-limit";
 import { touchReview } from "./sessions";
 
 export type PublicDrillQuestion = { id: string; prompt: string; note: string | null; choices: string[] };
@@ -77,6 +78,7 @@ export async function dailyDrill(profileId: string, kind: DrillKind, tier: Tier)
 }
 
 export async function answerDrill(input: { profileId: string; tier: Tier; questionId: string; choiceIndex: number }): Promise<DrillFeedback | { error: string }> {
+  if (!(await allowUse("drill"))) return { error: "Çok hızlı gidiyorsun. Bir dakika sonra devam et." };
   const question = questionById(input.questionId);
   if (!question || input.choiceIndex < 0 || input.choiceIndex >= question.choices.length) return { error: "Bu soru bulunamadı." };
   const db = await getDb();

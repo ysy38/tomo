@@ -229,3 +229,13 @@ CREATE INDEX IF NOT EXISTS auth_mail_email_purpose ON auth_mail (to_email, purpo
 
 ALTER TABLE auth_challenges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auth_mail ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS auth_limits (
+  id uuid PRIMARY KEY,
+  key_hash text NOT NULL,
+  purpose text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS auth_limits_lookup ON auth_limits (purpose, key_hash, created_at);
+ALTER TABLE auth_limits ENABLE ROW LEVEL SECURITY;

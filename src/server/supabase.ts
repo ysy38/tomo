@@ -21,7 +21,15 @@ export async function createSupabaseServer() {
     cookies: {
       getAll: () => jar.getAll(),
       setAll: (list) => {
-        for (const cookie of list) jar.set(cookie.name, cookie.value, cookie.options);
+        for (const cookie of list) {
+          jar.set(cookie.name, cookie.value, {
+            ...cookie.options,
+            httpOnly: cookie.options?.httpOnly ?? true,
+            sameSite: cookie.options?.sameSite ?? "lax",
+            secure: process.env.NODE_ENV === "production",
+            path: cookie.options?.path ?? "/",
+          });
+        }
       },
     },
   });
