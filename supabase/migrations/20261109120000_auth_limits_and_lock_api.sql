@@ -35,3 +35,7 @@ REVOKE ALL ON TABLE
   public.auth_challenges,
   public.auth_mail
 FROM PUBLIC, anon, authenticated;
+
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC, anon, authenticated;

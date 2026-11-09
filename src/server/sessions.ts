@@ -92,6 +92,21 @@ async function examFor(profileId: string | null): Promise<ExamCode> {
   return asExam(rows[0]?.exam);
 }
 
+export const practiceQuestionCap = 40;
+
+/** Published ids only, and never more than one day's work, even if the caller sends the whole bank. */
+export function practiceIdsWithinCap(requested: string[], allowed: ReadonlySet<string>): string[] {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const id of requested) {
+    if (unique.length >= practiceQuestionCap) break;
+    if (!allowed.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+  }
+  return unique;
+}
+
 export async function createSession(input: {
   mode: Mode;
   profileId: string | null;
@@ -127,14 +142,13 @@ export async function createSession(input: {
     if (picked.length !== 80) return { error: "Deneme şu an hazırlanamadı. Biraz sonra tekrar dene." };
     await recordEvent("simulator_started", input.profileId);
   } else {
-    const requested = input.itemIds ?? [];
+    const requested = practiceIdsWithinCap(input.itemIds ?? [], new Set(pool.map((item) => item.id)));
     if (!hasProgram(access.tier)) {
       await recordEvent("paywall_viewed", input.profileId, { reason: "practice" });
       return { paywall: true, error: "Günlük program Sprint ve Kamp’ta açılır." };
     }
     const allowance = requested.length || 8;
-    const allowed = new Set(pool.map((item) => item.id));
-    const fromPlan = requested.filter((id) => allowed.has(id)).slice(0, allowance);
+    const fromPlan = requested;
     picked =
       fromPlan.length > 0
         ? fromPlan.map((id) => pool.find((item) => item.id === id)).filter((item): item is PoolItem => Boolean(item))

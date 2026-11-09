@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { answers, choices, getDb, items } from "@/db/client";
 import { distractorText } from "@/content/labels";
@@ -16,8 +16,12 @@ export default async function MistakesPage() {
     .orderBy(desc(answers.createdAt))
     .limit(20);
   const itemIds = wrong.map((row) => row.itemId);
-  const itemRows = itemIds.length ? await db.select().from(items) : [];
-  const choiceRows = itemIds.length ? await db.select().from(choices) : [];
+  const itemRows = itemIds.length
+    ? await db.select({ id: items.id, section: items.section, stem: items.stem, explanation: items.explanation }).from(items).where(inArray(items.id, itemIds))
+    : [];
+  const choiceRows = itemIds.length
+    ? await db.select({ id: choices.id, body: choices.body, distractorType: choices.distractorType }).from(choices).where(inArray(choices.itemId, itemIds))
+    : [];
   return (
     <section>
       <h1 className="text-4xl">Yanlışların</h1>

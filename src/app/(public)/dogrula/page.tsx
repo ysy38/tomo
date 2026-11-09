@@ -43,6 +43,20 @@ export default async function VerifyEmailPage({
     );
   }
 
+  if (durum === "sinir") {
+    return (
+      <AuthScaffold
+        kicker="Hesap doğrulama"
+        title="Biraz bekle, sonra yeniden aç."
+        lede="Çok kısa sürede çok fazla bağlantı açıldı. Bir dakika sonra e-postadaki bağlantıyı yeniden dene. Hesabın duruyor."
+      >
+        <Link href={signInHref(next)} className="inline-block rounded-full bg-pine px-4 py-3 text-sm text-cream">
+          Giriş yap
+        </Link>
+      </AuthScaffold>
+    );
+  }
+
   if (durum === "hata") {
     return (
       <AuthScaffold

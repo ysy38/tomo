@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { claimGuest, currentProfile, markSignedIn, safeNextPath, supabaseEnabled } from "@/server/auth";
+import { allowUse } from "@/server/rate-limit";
 import { createSupabaseServer } from "@/server/supabase";
 
 const otpTypes = new Set<EmailOtpType>(["signup", "invite", "magiclink", "recovery", "email_change", "email"]);
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const next = safeNextPath(url.searchParams.get("next"));
   const fail = `/dogrula?durum=hata&sonra=${encodeURIComponent(next)}`;
+  if (!(await allowUse("callback"))) redirect(`/dogrula?durum=sinir&sonra=${encodeURIComponent(next)}`);
   if (!(await supabaseEnabled())) redirect(fail);
 
   const supabase = await createSupabaseServer();

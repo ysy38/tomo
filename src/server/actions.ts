@@ -9,6 +9,7 @@ import type { CheckoutPlan } from "@/modules/billing/entitlement";
 import { completeRecovery, confirmEmail, currentProfile, loginAccount, logoutAccount, markSignedIn, registerAccount, requestEmailVerification, requestPasswordReset, resetPassword, safeNextPath, updatePassword } from "./auth";
 import { claimGuestSessions, createSession, devActivate, ensureDailyPlan, entitlementFor, recordEvent, saveAnswer, setFlag, submitSession } from "./sessions";
 import { answerDrill } from "./drills";
+import { allowUse } from "./rate-limit";
 
 /** Only same-site paths, so the form cannot be used to bounce people to another domain. */
 function nextPath(formData: FormData) {
@@ -96,10 +97,10 @@ export async function saveOnboardingAction(formData: FormData) {
     .update(profiles)
     .set({
       exam: String(formData.get("exam") ?? "yds") === "ydt" ? "ydt" : "yds",
-      targetScore: Number(formData.get("targetScore") ?? 70),
-      examDate: String(formData.get("examDate") ?? "") || null,
-      dailyMinutes: Number(formData.get("dailyMinutes") ?? 30),
-      priorScore: formData.get("priorScore") ? Number(formData.get("priorScore")) : null,
+      targetScore: boundedNumber(formData.get("targetScore"), 70, 0, 100),
+      examDate: /^\d{4}-\d{2}-\d{2}$/.test(String(formData.get("examDate") ?? "")) ? String(formData.get("examDate")) : null,
+      dailyMinutes: boundedNumber(formData.get("dailyMinutes"), 30, 10, 90),
+      priorScore: formData.get("priorScore") ? boundedNumber(formData.get("priorScore"), 0, 0, 100) : null,
       onboardingCompleted: true,
     })
     .where(eq(profiles.id, profile.id));
@@ -144,10 +145,17 @@ export async function flagAction(sessionId: string, itemId: string, flagged: boo
 }
 
 export async function submitAction(sessionId: string) {
+  if (!(await allowUse("submit"))) redirect(`/oturum/${sessionId}`);
   const profile = await currentProfile();
   const { getGuestId } = await import("./auth");
   await submitSession(sessionId, profile?.id ?? null, await getGuestId());
   redirect(`/oturum/${sessionId}/sonuc`);
+}
+
+function boundedNumber(value: FormDataEntryValue | null, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
 export async function drillAnswerAction(questionId: string, choiceIndex: number) {

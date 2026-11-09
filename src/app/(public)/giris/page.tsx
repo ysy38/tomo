@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/auth-form";
-import { currentProfile } from "@/server/auth";
+import { currentProfile, safeNextPath } from "@/server/auth";
 
 export const metadata: Metadata = {
   title: "Giriş yap",
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ kayit?: string; sonra?: string }> }) {
   const { kayit, sonra } = await searchParams;
-  const next = sonra && /^\/(?![/\\])/.test(sonra) ? sonra : undefined;
+  const next = sonra ? safeNextPath(sonra) : undefined;
   if (await currentProfile()) redirect(next ?? "/bugun");
   return (
     <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-10 sm:px-5 sm:py-16 lg:grid-cols-[0.9fr_1fr]">

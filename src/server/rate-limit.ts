@@ -4,6 +4,7 @@ import { and, eq, gte, lt } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { getDb } from "@/db/client";
 import { authLimits } from "@/db/schema";
+import { clientAddress } from "./client-address";
 
 type Db = PgliteDatabase<any>;
 
@@ -42,7 +43,7 @@ async function callerKeys(email?: string) {
   let ip = "unknown";
   try {
     const h = await headers();
-    ip = (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "unknown").split(",")[0]?.trim() || "unknown";
+    ip = clientAddress((name) => h.get(name));
   } catch {
     ip = "no-request";
   }
@@ -80,6 +81,9 @@ const useWindows = {
   ],
   drill: [[120, hour]],
   health: [[30, 60 * 1000]],
+  submit: [[30, hour]],
+  callback: [[30, hour]],
+  identity: [[60, 60 * 1000]],
 } as const;
 
 /** Caps study and health traffic per network, so a script cannot walk the bank or hammer the database. */

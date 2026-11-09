@@ -4,9 +4,12 @@ import { drizzle } from "drizzle-orm/pglite";
 import { describe, expect, it } from "vitest";
 import { initSql } from "@/db/init-sql";
 import { authLimits } from "@/db/schema";
+import { safeNextPath } from "./auth";
 import { publicAuthError } from "./auth-errors";
+import { clientAddress } from "./client-address";
 import { consumeLimits } from "./rate-limit";
-import { sessionExpiryFromChunks } from "./supabase-session";
+import { practiceIdsWithinCap, practiceQuestionCap } from "./sessions";
+import { sessionExpiryFromChunks, shouldRefreshSupabase } from "./supabase-session";
 
 describe("auth return flow", () => {
   it("turns provider errors into a next step", () => {
@@ -38,5 +41,40 @@ describe("auth return flow", () => {
     expect(await consumeLimits(db, [{ ...check, purpose: "signup:ip" }])).toBe(true);
     expect(await db.select().from(authLimits)).toHaveLength(3);
     await client.close();
+  });
+
+  it("keeps the next page on this site", () => {
+    expect(safeNextPath("/bugun")).toBe("/bugun");
+    expect(safeNextPath("https://evil.example")).toBe("/bugun");
+    expect(safeNextPath("//evil.example")).toBe("/bugun");
+    expect(safeNextPath("/%2f%2fevil.example")).toBe("/bugun");
+    expect(safeNextPath("/bugun%00.evil")).toBe("/bugun");
+    expect(safeNextPath("/giris?sonra=%2Fbugun")).toBe("/giris?sonra=/bugun");
+  });
+
+  it("uses the platform address instead of a spoofed first hop", () => {
+    const headers = new Map([
+      ["x-forwarded-for", "1.2.3.4, 203.0.113.8"],
+      ["x-real-ip", "203.0.113.8"],
+    ]);
+    expect(clientAddress((name) => headers.get(name))).toBe("203.0.113.8");
+    headers.delete("x-real-ip");
+    expect(clientAddress((name) => headers.get(name))).toBe("203.0.113.8");
+  });
+
+  it("does not refresh an unreadable supabase cookie", () => {
+    expect(shouldRefreshSupabase(null)).toBe(false);
+    expect(shouldRefreshSupabase(0)).toBe(false);
+    expect(shouldRefreshSupabase(Math.floor(Date.now() / 1000) + 3600)).toBe(false);
+    expect(shouldRefreshSupabase(Math.floor(Date.now() / 1000) + 10)).toBe(true);
+  });
+
+  it("refuses a practice request that names the whole bank", () => {
+    const allowed = new Set(["a", "b", "c"]);
+    const requested = ["a", "a", "missing", ...Array.from({ length: practiceQuestionCap + 5 }, (_, index) => `q${index}`), "b"];
+    const picked = practiceIdsWithinCap(requested, allowed);
+    expect(picked).toEqual(["a", "b"]);
+    const bank = Array.from({ length: 200 }, (_, index) => `item-${index}`);
+    expect(practiceIdsWithinCap(bank, new Set(bank))).toHaveLength(practiceQuestionCap);
   });
 });

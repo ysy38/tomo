@@ -48,21 +48,24 @@ const remoteUsers = new Map<string, { at: number; user: { id: string; email: str
 
 async function supabaseUser(jar: { getAll(): { name: string; value: string }[] }): Promise<{ id: string; email: string } | null> {
   if (!hasSupabaseSession(jar) || !(await supabaseEnabled())) return null;
-  const key = createHash("sha256")
-    .update(
-      jar
-        .getAll()
-        .filter((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"))
-        .map((cookie) => cookie.value)
-        .join("."),
-    )
-    .digest("hex");
+  const chunks = jar
+    .getAll()
+    .filter((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"))
+    .sort((a, b) => (a.name < b.name ? -1 : 1))
+    .map((cookie) => cookie.value);
+  const { sessionExpiryFromChunks } = await import("./supabase-session");
+  const expiry = sessionExpiryFromChunks(chunks);
+  if (!expiry) return null;
+  const key = createHash("sha256").update(chunks.join(".")).digest("hex");
   const hit = remoteUsers.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.user;
+  const { allowUse } = await import("./rate-limit");
+  if (!(await allowUse("identity"))) return hit?.user ?? null;
   const { createSupabaseServer } = await import("./supabase");
   const supabase = await createSupabaseServer();
   const { data } = await supabase.auth.getUser();
   const user = data.user ? { id: data.user.id, email: data.user.email ?? "" } : null;
+  if (remoteUsers.size > 500) remoteUsers.clear();
   remoteUsers.set(key, { at: Date.now(), user });
   return user;
 }
@@ -79,12 +82,24 @@ async function setSession(id: string, version: number) {
   await markSignedIn();
 }
 
+/** Same-site path only. Encoded slashes and control characters cannot become an off-site redirect. */
 export function safeNextPath(value: string | undefined | null, fallback = "/bugun") {
-  return value && /^\/(?![/\\])/.test(value) ? value : fallback;
+  if (!value || value.length > 300) return fallback;
+  let path = value;
+  try {
+    path = decodeURIComponent(value);
+  } catch {
+    return fallback;
+  }
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\") || path.includes("//") || path.includes("://")) return fallback;
+  if (/[\u0000-\u001f\u007f]/.test(path)) return fallback;
+  return path;
 }
 
 /** Origin of the request the learner is actually using, so mail links stay on this host. */
 export async function requestOrigin() {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
+  if (process.env.NODE_ENV === "production" && /^https:\/\/[a-z0-9.-]+$/i.test(configured)) return configured;
   const h = await headers();
   const host = (h.get("x-forwarded-host") ?? h.get("host") ?? "").split(",")[0]?.trim() ?? "";
   if (!/^[a-z0-9.-]+(?::\d+)?$/i.test(host)) return "http://localhost:3000";
@@ -166,6 +181,9 @@ export async function registerAccount(
       options: { emailRedirectTo: `${await requestOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath(next))}` },
     });
     if (error) return { error: publicAuthError(error.message) };
+    if (!data.session && Array.isArray(data.user?.identities) && data.user.identities.length === 0) {
+      return { error: "Bu e-postayla açılmış bir hesap var. Giriş yap sekmesinden devam edebilirsin." };
+    }
     if (data.session) await markSignedIn();
     return { channel: "supabase", pending: !data.session };
   }
@@ -311,6 +329,7 @@ export async function updatePassword(current: string, next: string, confirm: str
     if (signed.error) return { error: "Mevcut şifre yanlış." };
     const updated = await supabase.auth.updateUser({ password: next });
     if (updated.error) return { error: publicAuthError(updated.error.message) };
+    await endOtherSupabaseSessions();
     return { ok: true as const };
   }
   const result = await changeAccountPassword(await getDb(), profile.id, current, next, confirm);
@@ -334,8 +353,20 @@ export async function completeRecovery(password: string, confirm: string) {
   if (emailIssue) return { error: emailIssue };
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: publicAuthError(error.message) };
+  await endOtherSupabaseSessions();
   await markSignedIn();
   return { ok: true as const };
+}
+
+/** The device that just set the password stays signed in. Older refresh tokens do not. */
+async function endOtherSupabaseSessions() {
+  try {
+    const { createSupabaseServer } = await import("./supabase");
+    const supabase = await createSupabaseServer();
+    await supabase.auth.signOut({ scope: "others" });
+  } catch {
+    // The new password is already saved.
+  }
 }
 
 /** Development only. Production never reads the mail queue back into a page. */
