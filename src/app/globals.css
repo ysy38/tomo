@@ -1,0 +1,531 @@
+@import "tailwindcss";
+
+/* Pinned scroll scenes need height and motion; keep in sync with PIN in hero-assembly.tsx. */
+@custom-variant pin (@media (min-height: 540px) and (prefers-reduced-motion: no-preference));
+
+/*
+  Outklas dual surface:
+  - Light = warm paper / ink stamp (readable olive for text, acid only on fills)
+  - Dark  = Carbon Olive-Black + Acid Lime neon
+*/
+:root {
+  --paper: #f3f2eb;
+  --ink: #14150f;
+  --muted: #5c6056;
+  --line: #ddd9c8;
+  /* Text / ring / border accent — deep olive, readable on paper */
+  --pine: #3f5c0a;
+  --pine-deep: #2f4507;
+  --pine-ink: #101408;
+  --teal: #0d7a5c;
+  --soft: #ebe9df;
+  --progress: #e4ecd4;
+  --night: #14150f;
+  --clay: #c73d2e;
+  --moss: #0d7a5c;
+  --card: #fffcf7;
+  --cream: #f3f2eb;
+  --gold: #3f5c0a;
+  /* Bright acid reserved for CTA fills + glows */
+  --acid: #d7ff62;
+  --shadow: 23 28 12;
+  /* Mark on paper: dark chip + cream frame + acid arrow (see .brand-chip) */
+  --mark-frame: #f4f3eb;
+  --mark-arrow: #d7ff62;
+  --mark-chip: #14150f;
+  color-scheme: light;
+}
+
+.dark {
+  --paper: #10110f;
+  --ink: #f4f3eb;
+  --muted: #a7aa9e;
+  --line: #2a2e24;
+  --pine: #d7ff62;
+  --pine-deep: #b8e045;
+  --pine-ink: #101408;
+  --teal: #57e5a8;
+  --soft: #161814;
+  --progress: #1a2416;
+  --night: #080907;
+  --clay: #ff6b57;
+  --moss: #57e5a8;
+  --card: #191c16;
+  --cream: #f4f3eb;
+  --gold: #d7ff62;
+  --acid: #d7ff62;
+  --shadow: 0 0 0;
+  /* On carbon, chip blends; frame stays cream, arrow acid */
+  --mark-frame: color-mix(in srgb, #f4f3eb 55%, transparent);
+  --mark-arrow: #d7ff62;
+  --mark-chip: #191c16;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--font-manrope), "Segoe UI", sans-serif;
+  --font-serif: var(--font-newsreader), Palatino, serif;
+  --font-display: var(--font-jakarta), var(--font-manrope), sans-serif;
+  --font-logo: var(--font-unbounded), var(--font-jakarta), sans-serif;
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-pine: var(--pine);
+  --color-pine-deep: var(--pine-deep);
+  --color-pine-ink: var(--pine-ink);
+  --color-teal: var(--teal);
+  --color-soft: var(--soft);
+  --color-progress: var(--progress);
+  --color-night: var(--night);
+  --color-clay: var(--clay);
+  --color-moss: var(--moss);
+  --color-card: var(--card);
+  --color-cream: var(--cream);
+  --color-gold: var(--gold);
+  --color-acid: var(--acid);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+  text-rendering: optimizeLegibility;
+}
+
+/* Warm paper wash — soft acid glow without washing out type */
+html:not(.dark) body {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 55% 42% at 92% -4%, color-mix(in srgb, var(--acid) 28%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 32% at 4% 8%, color-mix(in srgb, var(--teal) 10%, transparent), transparent 68%),
+    linear-gradient(180deg, #f7f6f0 0%, var(--paper) 42%, #efece3 100%);
+  background-attachment: fixed;
+}
+
+.display {
+  font-size: clamp(2.25rem, 7vw, 3.5rem);
+  line-height: 1.08;
+}
+
+@keyframes load {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.display-xl {
+  font-size: clamp(2.75rem, 8vw, 5.4rem);
+  line-height: 0.96;
+  letter-spacing: -0.045em;
+}
+
+.landing {
+  position: relative;
+  isolation: isolate;
+}
+
+.landing::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 48rem;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 38rem 30rem at 78% 16%, color-mix(in srgb, var(--acid) 22%, transparent), transparent 68%),
+    radial-gradient(ellipse 26rem 22rem at 92% 38%, color-mix(in srgb, var(--teal) 12%, transparent), transparent 70%),
+    radial-gradient(ellipse 22rem 16rem at 8% 6%, color-mix(in srgb, var(--soft) 90%, transparent), transparent 72%);
+}
+
+html:not(.dark) .landing::before {
+  background:
+    radial-gradient(ellipse 36rem 28rem at 82% 12%, color-mix(in srgb, var(--acid) 32%, transparent), transparent 66%),
+    radial-gradient(ellipse 24rem 20rem at 10% 4%, color-mix(in srgb, var(--pine) 8%, transparent), transparent 70%);
+}
+
+.hero-card {
+  width: min(9.15rem, 46%);
+}
+
+.hero-card-wide {
+  width: min(11.5rem, 56%);
+}
+
+@media (min-width: 640px) {
+  .hero-card,
+  .hero-card-wide {
+    width: 12.35rem;
+  }
+}
+
+.landing :is(h1, h2, h3) {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.glass {
+  background: color-mix(in srgb, var(--card) 68%, transparent);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 30px 80px -48px color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.lift {
+  transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.45s ease, box-shadow 0.45s ease;
+}
+
+.lift:hover {
+  transform: translateY(-8px);
+  border-color: color-mix(in srgb, var(--pine) 45%, var(--line));
+}
+
+.ribbon {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.ribbon-track {
+  display: flex;
+  width: max-content;
+  gap: 2.75rem;
+  animation: ribbon 36s linear infinite;
+}
+
+@keyframes ribbon {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-rise] {
+      animation: rise-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 22%;
+    }
+  }
+}
+
+/*
+  Fills always use bright acid (readable punch on paper + neon on carbon).
+  text-pine / border-pine stay on --pine (deep olive in light, acid in dark).
+*/
+.bg-pine,
+.bg-pine-deep {
+  background-color: var(--acid) !important;
+  color: var(--pine-ink) !important;
+  box-shadow: 0 14px 36px -16px color-mix(in srgb, var(--acid) 55%, transparent);
+}
+
+.from-pine {
+  --tw-gradient-from: var(--acid) !important;
+}
+
+.grad {
+  background: linear-gradient(100deg, var(--ink) 0%, var(--pine) 48%, var(--teal) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.grad-acid {
+  color: var(--pine);
+}
+
+/* Premium paper cards in light */
+html:not(.dark) .lift,
+html:not(.dark) .glass {
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--ink) 4%, transparent),
+    0 18px 40px -28px rgb(var(--shadow) / 0.28);
+}
+
+html:not(.dark) header {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--line) 85%, var(--pine) 15%);
+}
+
+/* Logo chip: keeps open-box mark readable on warm paper */
+.brand-chip {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.7rem;
+  background: var(--mark-chip);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent),
+    0 10px 22px -14px rgb(var(--shadow) / 0.45);
+}
+
+@media (min-width: 640px) {
+  .brand-chip {
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 0.8rem;
+  }
+}
+
+.dark .brand-chip {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--acid) 18%, transparent);
+}
+
+@keyframes reading-laser-dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+.reading-laser {
+  stroke-dasharray: 6 8;
+  animation: reading-laser-dash 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading-laser {
+    animation: none;
+  }
+}
+
+.link-underline {
+  background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+  transition: background-size 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), color 0.2s ease;
+}
+
+.link-underline:hover {
+  background-size: 100% 1px;
+}
+
+.footer-mark {
+  font-size: clamp(5rem, 24vw, 19rem);
+  margin-bottom: -0.12em;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pine) 55%, var(--ink)) 10%, color-mix(in srgb, var(--pine) 8%, transparent) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.tilt {
+  transform: perspective(1400px) rotateY(-5deg) rotateX(3deg);
+  transition: transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.tilt:hover {
+  transform: perspective(1400px) rotateY(0) rotateX(0) translateY(-6px);
+}
+
+.float {
+  animation: float 7s ease-in-out infinite;
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.35) 50%, transparent 70%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.shine:hover::after {
+  transform: translateX(120%);
+}
+
+.pulse-dot {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--pine) 50%, transparent);
+  animation: pulse-dot 2.4s ease-out infinite;
+}
+
+@keyframes pulse-dot {
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.route-line {
+  background: linear-gradient(90deg, var(--pine), var(--gold));
+  transform-origin: left;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .route-line {
+      animation: bar-grow linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 45%;
+    }
+  }
+}
+
+.page-enter {
+  animation: rise-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+:root {
+  interpolate-size: allow-keywords;
+}
+
+details.faq::details-content {
+  height: 0;
+  overflow: clip;
+  transition: height 0.45s cubic-bezier(0.2, 0.7, 0.2, 1), content-visibility 0.45s allow-discrete;
+}
+
+details.faq[open]::details-content {
+  height: auto;
+}
+
+.bar-grow {
+  transform-origin: left;
+  animation: bar-grow 1.05s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.path-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: path-draw 2.4s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s forwards;
+}
+
+@keyframes path-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 22px;
+    scale: 0.985;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.rise-in-late {
+  animation-delay: 0.14s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .ribbon-track,
+  .bar-grow,
+  .rise-in,
+  .float,
+  .pulse-dot,
+  .page-enter,
+  .path-draw {
+    animation: none;
+  }
+
+  .path-draw {
+    stroke-dashoffset: 0;
+  }
+
+  .lift:hover,
+  .tilt,
+  .tilt:hover {
+    transform: none;
+  }
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 520;
+  letter-spacing: -0.03em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--pine) 28%, transparent);
+}
+
+body,
+.bg-card,
+.bg-paper,
+.bg-pine,
+.text-ink,
+.text-muted,
+.border-line {
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+@media print {
+  .dark {
+    --paper: #ffffff;
+    --ink: #17243b;
+    --muted: #5c6b82;
+    --line: #e4e8f2;
+    --card: #ffffff;
+    --pine: #4263eb;
+    --teal: #0f9fad;
+    --soft: #e8edff;
+    --progress: #e8f5ef;
+    --gold: #4263eb;
+    color-scheme: light;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .print-page + .print-page {
+    break-before: page;
+  }
+}

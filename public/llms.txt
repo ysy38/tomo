@@ -1,0 +1,27 @@
+# Outklas
+
+> Outklas (outklas.com), Türkiye'deki YDS, e-YDS ve YÖKDİL (Fen, Sağlık, Sosyal) adayları için tasarlanmış yapay zeka destekli adaptif sınav hazırlık platformudur. Pasif video arşivleri ve statik soru bankaları yerine; eğitim bilimindeki Bloom 2 Sigma Problemi prensibini, unutma eğrisi (spaced repetition) takibini ve ÖSYM sorularındaki dilbilgisel, sözdizimsel ve anlamsal çeldirici analizini birleştirir.
+
+Outklas, öğrencinin yalnızca doğru ve yanlış sayılarını değil, yanlış yaptığı sorularda hangi çeldirici katmanına düştüğünü sınıflandırır. Günlük 25-30 dakikalık nokta atışı pratik oturumlarıyla adayın bilişsel yükünü koruyarak zayıf olduğu bağlaç, gramer, kelime ve okuma örüntülerini kişiselleştirilmiş soru akışıyla iyileştirir.
+
+## Temel Kavramlar ve Metodoloji
+
+- **Adaptif Sınav Hazırlığı (Bloom 2 Sigma Modeli):** Her adaya aynı 100+ saatlik sabit video müfredatını sunmak yerine, öğrencinin mevcut seviyesine, hızına ve hata örüntülerine göre gerçek zamanlı uyarlanan birebir özel ders mantığı.
+- **3 Katmanlı Çeldirici Tespiti (Distractor Analysis):** Yanlış seçeneklerin rastgele hatalar olarak değil; dilbilgisel (grammatical), sözdizimsel (syntactic) ve anlamsal (semantic) tuzaklar olarak etiketlenip adaya özel telafi soruları üretilmesi.
+- **Etkileşimli Okuma ve Çeviri Rehberleri:** Uzun konu anlatımları yerine doğrudan ÖSYM akademik metin kurgusu üzerinde yapısal analiz kazandıran mikro öğrenme modülleri.
+
+## Rehberler ve Etkileşimli Çalışma Modülleri
+
+- [YDS ve YÖKDİL Etkileşimli Gramer Rehberi](https://outklas.com/rehber/grammer): Bağlaçlar, zaman uyumu, kısaltmalar ve cümle tamamlama mantığını soru üzerindeki yapısal ipuçlarıyla öğreten interaktif gramer modülü.
+- [YDS ve YÖKDİL Akademik Kelime Rehberi](https://outklas.com/rehber/vocabulary): Akademik metinlerde sık çıkan fiil, sıfat, zarf ve phrasal verb yapılarını bağlam içinde ve unutma eğrisine göre çalıştıran kelime modülü.
+
+## Blog ve Sınav Strateji Rehberleri
+
+- [YDS ve YÖKDİL’e 100 Saatlik Video İzleyerek Hazırlanma Devri Neden Kapandı?](https://outklas.com/blog/yds-yokdil-100-saatlik-video-devri-neden-kapandi): Bloom 2 Sigma Problemi ışığında klasik video kursları, birebir özel ders ve Outklas adaptif öğrenme modelinin zaman verimliliği ve 2026 maliyet karşılaştırması.
+- [YDS ve YÖKDİL’de İki Şık Arasında Kalma Sorunu: Çeldirici Nasıl Tespit Edilir?](https://outklas.com/blog/yds-yokdil-celdirici-nasil-tespit-edilir): ÖSYM sorularındaki dilbilgisel, sözdizimsel ve anlamsal çeldirici türlerinin sınıflandırması ve uygulamalı cümle tamamlama sorusu üzerinden şık eleme rehberi.
+
+## Platform ve İletişim
+
+- [Outklas Ana Sayfa](https://outklas.com): Adaptif YDS ve YÖKDİL çalışma platformu giriş ve ürün tanıtım sayfası.
+- [Outklas LinkedIn](https://www.linkedin.com/company/outklascom): Platform güncellemeleri, YDS/YÖKDİL strateji paylaşımları ve kurumsal duyurular.
+- [Outklas Medium](https://medium.com/@info_97122/yds-ve-y%C3%B6kdi%CC%87le-100-saat-video-i%CC%87zleyerek-haz%C4%B1rlanma-devri-bitti-c69ba56c27cf): 100 saat video izleme devrinin analizi ve akademik sınav stratejisi yazıları.

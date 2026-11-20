@@ -1,0 +1,143 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { brand, siteUrl } from "@/brand";
+import { EditorialNote } from "@/components/editorial-note";
+import { OfferCards } from "@/components/offer-cards";
+import { digitalOfferPolicyJsonLd } from "@/content/editorial";
+import { freeOffer, offers, tl } from "@/content/offers";
+import { countdownText, daysUntil, finishedFamilies, formatDay, upcomingSittings } from "@/content/exam-calendar";
+
+export const metadata: Metadata = {
+  title: "Fiyat",
+  description: `Cümle Röntgeni ücretsiz. Sprint ${tl(brand.prices.gelisim)} TL / ${brand.accessDays.gelisim} gün, Kamp ${tl(brand.prices.kamp)} TL / ${brand.accessDays.kamp} gün. Tek ödeme, abonelik yok, KDV dahil.`,
+  alternates: { canonical: "/fiyat" },
+};
+
+function applyNote(applyFrom: string | undefined, applyUntil: string | undefined, lateApply: string | undefined) {
+  if (!applyUntil) return null;
+  if (applyFrom && daysUntil(applyFrom) > 0) return `Başvurular ${formatDay(applyFrom)} tarihinde başlıyor.`;
+  const left = daysUntil(applyUntil);
+  const late = lateApply ? ` Geç başvuru: ${formatDay(lateApply)}.` : "";
+  if (left > 0) return `Son başvuru: ${formatDay(applyUntil)}.${late}`;
+  if (left === 0) return `Son başvuru bugün.${late}`;
+  if (lateApply && daysUntil(lateApply) >= 0) return `Normal başvuru süresi bitti. Geç başvuru: ${formatDay(lateApply)}.`;
+  return null;
+}
+
+export default function PricingPage() {
+  const upcoming = upcomingSittings();
+  const finished = finishedFamilies();
+  const policy = digitalOfferPolicyJsonLd();
+  const offer = (name: string, price: number, description: string, extra: Record<string, unknown> = {}) => ({
+    "@type": "Offer",
+    name,
+    description,
+    price: price.toFixed(2),
+    priceCurrency: "TRY",
+    availability: "https://schema.org/InStock",
+    url: `${siteUrl}/fiyat`,
+    itemCondition: "https://schema.org/NewCondition",
+    seller: { "@id": `${siteUrl}/#organization` },
+    ...policy,
+    ...extra,
+  });
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": ["Product", "SoftwareApplication"],
+    name: `${brand.name} YDS ve YÖKDİL hazırlık`,
+    description: `YDS, e-YDS, YÖKDİL ve e-YÖKDİL için ${brand.diagnosticQuestions} soruluk seviye testi, günlük çalışma planı ve tam deneme.`,
+    brand: { "@type": "Brand", name: brand.name },
+    image: `${siteUrl}/brand/outklas-mark-512.png`,
+    url: `${siteUrl}/fiyat`,
+    applicationCategory: "EducationalApplication",
+    operatingSystem: "Web",
+    offers: [
+      offer(freeOffer.name, 0, `${freeOffer.points.join(", ")}.`),
+      offer(offers.gelisim.name, offers.gelisim.price, `${offers.gelisim.days} gün erişim, tek ödeme, KDV dahil.`, {
+        priceValidUntil: brand.launchUntil,
+      }),
+      offer(offers.kamp.name, offers.kamp.price, `${offers.kamp.days} gün erişim, tek ödeme, KDV dahil.`, {
+        priceValidUntil: brand.launchUntil,
+      }),
+    ],
+  };
+  return (
+    <section className="landing mx-auto w-full max-w-6xl px-4 py-12 sm:px-5 sm:py-20">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <p className="text-xs uppercase tracking-[0.18em] text-gold">Fiyat</p>
+      <h1 className="display-xl mt-4 max-w-3xl font-serif">
+        Önce değeri gör. <span className="grad">Sonra yolunu seç.</span>
+      </h1>
+      <EditorialNote path="/fiyat" className="mt-4" />
+      <p className="mt-4 max-w-2xl text-base leading-8 text-muted sm:text-lg">
+        Cümle Röntgeni ücretsizdir ve hesap istemez. Sınavına {brand.sprintMaxDays} gün ya da daha az varsa Sprint ({tl(brand.prices.gelisim)} TL / {brand.accessDays.gelisim} gün), daha fazla varsa Kamp ({tl(brand.prices.kamp)} TL / {brand.accessDays.kamp} gün). İki paket de tek ödemedir; abonelik yok, fiyatlar KDV dahil. İstersen 3 taksit görünümüyle karşılaştır (Sprint 3 × {tl(brand.installment.gelisim)} TL, Kamp 3 × {tl(brand.installment.kamp)} TL); checkout tek ödemedir. Sprint’ten Kamp’a geçersen ödediğin tutar düşülür. Paketler dijitaldir: kargo yoktur, ödeme sonrası erişim anında açılır.
+      </p>
+
+      <div className="mt-10 grid items-stretch gap-4 lg:grid-cols-[0.8fr_2fr]">
+        <article data-rise className="lift glass flex flex-col rounded-3xl border border-line p-6">
+          <p className="text-xs uppercase tracking-[0.16em] text-gold">{freeOffer.eyebrow}</p>
+          <h2 className="mt-2 text-2xl">{freeOffer.name}</h2>
+          <p className="mt-4 font-serif text-4xl">
+            0 TL <span className="font-sans text-sm text-muted">süresiz</span>
+          </p>
+          <ul className="mt-5 flex-1 space-y-2 text-sm leading-6 text-muted">
+            {freeOffer.points.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+          <Link href="/teshis" className="mt-5 rounded-full border border-pine px-5 py-3 text-center text-pine transition hover:bg-pine hover:text-cream">
+            Ücretsiz seviyemi ölç →
+          </Link>
+        </article>
+        <OfferCards signedIn={false} daysLeft={null} />
+      </div>
+
+      <div data-rise className="glass mt-10 rounded-[28px] border border-line p-5 sm:p-6">
+        <h2 className="text-2xl">Yaklaşan sınavlar</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">Tarihler ÖSYM’nin 2026 sınav takviminden alınmıştır. Bir değişiklik olursa osym.gov.tr’deki bilgi geçerlidir.</p>
+        <ul className="mt-5 divide-y divide-line">
+          {upcoming.map((sitting) => {
+            const note = applyNote(sitting.applyFrom, sitting.applyUntil, sitting.lateApply);
+            return (
+              <li key={sitting.id} className="flex flex-col gap-1 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                <div className="min-w-0">
+                  <p className="text-lg">{sitting.name}</p>
+                  <p className="text-sm text-muted">
+                    {sitting.detail}
+                    {note ? ` · ${note}` : ""}
+                  </p>
+                </div>
+                <p className="shrink-0 font-serif text-2xl">
+                  {formatDay(sitting.date)}
+                  <span className="mt-1 block font-sans text-sm text-muted sm:text-right">{countdownText(sitting.days)}</span>
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+        {finished.length > 0 ? (
+          <p className="border-t border-line pt-4 text-sm leading-6 text-muted">
+            {finished.map((row) => `${row.sitting.name} ${formatDay(row.sitting.date)} tarihinde yapıldı`).join(". ")}. 2026 takviminde bu sınavlar için başka oturum yok.
+          </p>
+        ) : null}
+        <p className="mt-3 text-sm">
+          <a className="text-pine" href="https://www.osym.gov.tr/Sayfa/SinavTakvimi">
+            ÖSYM sınav takvimi
+          </a>
+        </p>
+      </div>
+      <p className="mt-6 max-w-2xl text-sm leading-6 text-muted">
+        Ücretli planlar tek ödemedir, abonelik yoktur. İptal ve iade koşulları{" "}
+        <Link href="/iade" className="link-underline text-pine">
+          iade sayfasında
+        </Link>
+        , sözleşme özeti{" "}
+        <Link href="/mesafeli-satis" className="link-underline text-pine">
+          mesafeli satış sayfasında
+        </Link>
+        .
+      </p>
+
+    </section>
+  );
+}
